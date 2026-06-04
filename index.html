@@ -7,6 +7,7 @@
 <meta name="description" content="Simulate your PAC portfolio with real historical data."/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
@@ -28,6 +29,15 @@ canvas{display:block}
 <div id="root"></div>
 <script>
 const {useState,useEffect,useCallback,useRef}=React;
+
+// ── Supabase ─────────────────────────────────────────────────────────────────
+// 1. Go to https://supabase.com → New project
+// 2. Project Settings → API → copy URL and anon key below
+// 3. Run the schema SQL in the Supabase SQL editor (see supabase-schema.sql)
+const SUPABASE_URL='https://YOUR_PROJECT.supabase.co';
+const SUPABASE_ANON_KEY='YOUR_ANON_KEY';
+const sb=(typeof supabase!=='undefined'&&!SUPABASE_URL.includes('YOUR_PROJECT'))
+  ?supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
 
 const T={
   en:{liveMarkets:"Live Markets",heroTitle:"Build wealth with",heroSpan:"compound investing",heroSub:"Simulate your PAC portfolio with real historical data. Any ETF, stock, or fund — by ISIN, ticker, or name.",startSimulating:"Start Simulating →",learnMore:"Learn More",latestNews:"Latest Financial News",topPerformers:"Top Performers",today:"Today",month:"Month",year:"Year",toolTitle:"PAC Portfolio Simulator",toolDesc:"Search by ISIN, ticker or name. Build your full portfolio. See real historical returns.",openSimulator:"Open Simulator →",disclaimer:"Data from Yahoo Finance · Not financial advice",simTitle:"PAC Portfolio Simulator",simSubtitle:"Real historical data · Any ETF, stock, fund or crypto",searchPlaceholder:"Search by ISIN, ticker or name (e.g. IE00B4L5Y983, IWDA, MSCI World)...",portfolio:"My Portfolio",emptyPortfolio:"Search and add instruments above to start simulating",startDate:"Start date",time:"Time",monthly:"Monthly (€)",simulate:"Simulate",simulating:"Loading data...",totalInvested:"Total Invested",currentValue:"Current Value",totalGain:"Total Gain",annualReturn:"Annual Return",years:"yrs",simDisclaimer:"Based on real historical prices · Not financial advice · Past performance does not guarantee future results",backHome:"← Home",invested:"Invested",value:"Value"},
@@ -184,6 +194,246 @@ function SimpleChart({data,series,darkMode}){
   return React.createElement('canvas',{ref,width:800,height:280,style:{width:"100%",height:280}});
 }
 
+// ── AUTH MODAL ────────────────────────────────────────────────────────────────
+function AuthModal({dark,onClose,onAuth}){
+  const [mode,setMode]=useState('login');
+  const [email,setEmail]=useState('');
+  const [password,setPassword]=useState('');
+  const [username,setUsername]=useState('');
+  const [age,setAge]=useState('');
+  const [err,setErr]=useState('');
+  const [loading,setLoading]=useState(false);
+  const bg=dark?'#0A0F1A':'#FFFFFF';
+  const bg2=dark?'#0F1726':'#EEF1F7';
+  const text=dark?'#E8EDF3':'#0D1520';
+  const text2=dark?'#5A6A7A':'#5A6A80';
+  const border=dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)';
+  const e=React.createElement;
+  async function submit(){
+    setErr('');setLoading(true);
+    try{
+      if(mode==='login'){
+        const{error}=await sb.auth.signInWithPassword({email,password});
+        if(error)throw error;
+        onAuth();onClose();
+      }else{
+        if(!username.trim())throw new Error('Username is required');
+        const{data:ex}=await sb.from('profiles').select('id').eq('username',username.trim()).maybeSingle();
+        if(ex)throw new Error('Username already taken');
+        const{data,error}=await sb.auth.signUp({email,password});
+        if(error)throw error;
+        if(data.user)await sb.from('profiles').insert({id:data.user.id,username:username.trim(),age:parseInt(age)||null});
+        onAuth();onClose();
+      }
+    }catch(ex){setErr(ex.message);}
+    setLoading(false);
+  }
+  return e('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:16}},
+    e('div',{style:{background:bg,border:`1px solid ${border}`,borderRadius:16,padding:28,width:'100%',maxWidth:380,position:'relative'}},
+      e('button',{onClick:onClose,style:{position:'absolute',top:12,right:14,background:'transparent',border:'none',color:text2,fontSize:18,cursor:'pointer'}},'✕'),
+      e('h2',{style:{fontSize:18,fontWeight:700,color:text,marginBottom:4}},mode==='login'?'Welcome back':'Create account'),
+      e('p',{style:{fontSize:13,color:text2,marginBottom:20}},mode==='login'?'Sign in to save and manage your portfolios':'Join CompoundPath to save your simulations'),
+      e('div',{style:{display:'flex',gap:4,background:bg2,borderRadius:8,padding:4,marginBottom:20}},
+        ['login','register'].map(m=>e('button',{key:m,onClick:()=>{setMode(m);setErr('');},style:{flex:1,background:mode===m?'#00C896':'transparent',border:'none',borderRadius:6,color:mode===m?'#000':text2,padding:'6px',fontSize:13,fontWeight:600,cursor:'pointer'}},m==='login'?'Sign In':'Register'))
+      ),
+      ...(mode==='register'?[
+        e('input',{key:'u',placeholder:'Username',value:username,onChange:ev=>setUsername(ev.target.value),style:{width:'100%',background:bg2,border:`1px solid ${border}`,borderRadius:8,color:text,padding:'10px 12px',fontSize:13,outline:'none',marginBottom:8,display:'block'}}),
+        e('input',{key:'a',type:'number',placeholder:'Age',value:age,onChange:ev=>setAge(ev.target.value),style:{width:'100%',background:bg2,border:`1px solid ${border}`,borderRadius:8,color:text,padding:'10px 12px',fontSize:13,outline:'none',marginBottom:8,display:'block'}}),
+      ]:[]),
+      e('input',{type:'email',placeholder:'Email',value:email,onChange:ev=>setEmail(ev.target.value),style:{width:'100%',background:bg2,border:`1px solid ${border}`,borderRadius:8,color:text,padding:'10px 12px',fontSize:13,outline:'none',marginBottom:8,display:'block'}}),
+      e('input',{type:'password',placeholder:'Password (min 6 chars)',value:password,onChange:ev=>setPassword(ev.target.value),style:{width:'100%',background:bg2,border:`1px solid ${border}`,borderRadius:8,color:text,padding:'10px 12px',fontSize:13,outline:'none',marginBottom:12,display:'block'}}),
+      err&&e('p',{style:{fontSize:12,color:'#FF4D4D',marginBottom:10}},err),
+      e('button',{onClick:submit,disabled:loading||!sb,style:{width:'100%',background:loading||!sb?bg2:'#00C896',border:'none',borderRadius:10,color:loading||!sb?text2:'#000',padding:'11px',fontSize:14,fontWeight:700,cursor:loading||!sb?'not-allowed':'pointer'}},
+        !sb?'Supabase not configured':loading?'Loading...':mode==='login'?'Sign In':'Create Account'
+      )
+    )
+  );
+}
+
+// ── SAVE PORTFOLIO MODAL ──────────────────────────────────────────────────────
+function SavePortfolioModal({dark,user,portfolio,onClose,onSaved}){
+  const [name,setName]=useState('My Portfolio');
+  const [desc,setDesc]=useState('');
+  const [isPublic,setIsPublic]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState('');
+  const bg=dark?'#0A0F1A':'#FFFFFF';
+  const bg2=dark?'#0F1726':'#EEF1F7';
+  const text=dark?'#E8EDF3':'#0D1520';
+  const text2=dark?'#5A6A7A':'#5A6A80';
+  const border=dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)';
+  const e=React.createElement;
+  async function save(){
+    setLoading(true);setErr('');
+    try{
+      const instruments=portfolio.map(p=>({ticker:p.ticker,name:p.name,type:p.type,monthly:p.monthly,startDate:p.startDate,startTime:p.startTime,color:p.color}));
+      const{error}=await sb.from('portfolios').insert({user_id:user.id,name,description:desc,is_public:isPublic,instruments});
+      if(error)throw error;
+      onSaved();onClose();
+    }catch(ex){setErr(ex.message);}
+    setLoading(false);
+  }
+  return e('div',{style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:200,display:'flex',alignItems:'center',justifyContent:'center',padding:16}},
+    e('div',{style:{background:bg,border:`1px solid ${border}`,borderRadius:16,padding:28,width:'100%',maxWidth:400,position:'relative'}},
+      e('button',{onClick:onClose,style:{position:'absolute',top:12,right:14,background:'transparent',border:'none',color:text2,fontSize:18,cursor:'pointer'}},'✕'),
+      e('h2',{style:{fontSize:17,fontWeight:700,color:text,marginBottom:4}},'Save Portfolio'),
+      e('p',{style:{fontSize:13,color:text2,marginBottom:20}},portfolio.length+' instruments — save to your account'),
+      e('input',{placeholder:'Portfolio name',value:name,onChange:ev=>setName(ev.target.value),style:{width:'100%',background:bg2,border:`1px solid ${border}`,borderRadius:8,color:text,padding:'10px 12px',fontSize:13,outline:'none',marginBottom:8,display:'block'}}),
+      e('textarea',{placeholder:'Short description (optional)',value:desc,onChange:ev=>setDesc(ev.target.value),rows:3,style:{width:'100%',background:bg2,border:`1px solid ${border}`,borderRadius:8,color:text,padding:'10px 12px',fontSize:13,outline:'none',resize:'none',marginBottom:12,fontFamily:'inherit',display:'block'}}),
+      e('label',{style:{display:'flex',alignItems:'center',gap:10,cursor:'pointer',marginBottom:16,fontSize:13,color:text}},
+        e('input',{type:'checkbox',checked:isPublic,onChange:ev=>setIsPublic(ev.target.checked),style:{accentColor:'#00C896',width:16,height:16}}),
+        e('div',null,
+          e('div',{style:{fontWeight:600}},'Make public'),
+          e('div',{style:{color:text2,fontSize:12}},'Visible on your public profile page')
+        )
+      ),
+      err&&e('p',{style:{fontSize:12,color:'#FF4D4D',marginBottom:10}},err),
+      e('button',{onClick:save,disabled:loading||!name.trim(),style:{width:'100%',background:loading||!name.trim()?bg2:'#00C896',border:'none',borderRadius:10,color:loading||!name.trim()?text2:'#000',padding:'11px',fontSize:14,fontWeight:700,cursor:'pointer'}},
+        loading?'Saving...':'Save Portfolio'
+      )
+    )
+  );
+}
+
+// ── MY PORTFOLIOS PAGE ────────────────────────────────────────────────────────
+function MyPortfolios({dark,user,profile,onBack,onLoadPortfolio}){
+  const [portfolios,setPortfolios]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const bg=dark?'#080D14':'#F4F6FA';
+  const bg2=dark?'#0A0F1A':'#FFFFFF';
+  const text=dark?'#E8EDF3':'#0D1520';
+  const text2=dark?'#5A6A7A':'#5A6A80';
+  const text3=dark?'#2A3A4A':'#9AA8B8';
+  const border=dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)';
+  const card=dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)';
+  const e=React.createElement;
+  async function load(){
+    setLoading(true);
+    const{data}=await sb.from('portfolios').select('*').eq('user_id',user.id).order('created_at',{ascending:false});
+    setPortfolios(data||[]);setLoading(false);
+  }
+  useEffect(()=>{if(sb)load();},[]);
+  async function togglePublic(id,cur){
+    await sb.from('portfolios').update({is_public:!cur}).eq('id',id);
+    setPortfolios(prev=>prev.map(p=>p.id===id?{...p,is_public:!cur}:p));
+  }
+  async function del(id){
+    if(!window.confirm('Delete this portfolio?'))return;
+    await sb.from('portfolios').delete().eq('id',id);
+    setPortfolios(prev=>prev.filter(p=>p.id!==id));
+  }
+  return e('div',{style:{minHeight:'100vh',background:bg,fontFamily:"'DM Sans',system-ui,sans-serif",color:text}},
+    e('nav',{style:{background:bg2,borderBottom:`1px solid ${border}`,padding:'0 20px',height:52,display:'flex',alignItems:'center',gap:12,position:'sticky',top:0,zIndex:100}},
+      e('button',{onClick:onBack,style:{background:'transparent',border:`1px solid ${border}`,borderRadius:8,color:text2,padding:'4px 12px',fontSize:12,cursor:'pointer'}},'← Home'),
+      e('div',{style:{fontSize:15,fontWeight:700,color:text}},'Compound',e('span',{style:{color:'#00C896'}},'Path'),e('span',{style:{fontSize:12,color:text3,marginLeft:6,fontWeight:400}},'My Portfolios'))
+    ),
+    e('div',{style:{maxWidth:760,margin:'0 auto',padding:'28px 16px'}},
+      profile&&e('div',{style:{background:card,border:`1px solid ${border}`,borderRadius:14,padding:'16px 20px',marginBottom:24,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}},
+        e('div',{style:{width:44,height:44,borderRadius:'50%',background:'linear-gradient(135deg,#00C896,#0099FF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:700,color:'#000',flexShrink:0}},(profile.username||'?')[0].toUpperCase()),
+        e('div',null,
+          e('div',{style:{fontWeight:700,fontSize:15,color:text}},profile.username),
+          e('div',{style:{fontSize:12,color:text2}},(profile.age?'Age '+profile.age+' · ':'')+user.email),
+          e('a',{href:'?profile='+profile.username,target:'_blank',style:{fontSize:11,color:'#00C896',textDecoration:'none'}},'🔗 View public profile')
+        )
+      ),
+      e('div',{style:{fontSize:11,color:text3,textTransform:'uppercase',letterSpacing:1.5,marginBottom:14,display:'flex',alignItems:'center',gap:8}},
+        'Saved Portfolios ('+portfolios.length+')',e('span',{style:{flex:1,height:1,background:border}})
+      ),
+      loading?e('div',{style:{color:text3,padding:20,textAlign:'center'}},'Loading...'):
+      portfolios.length===0?e('div',{style:{background:card,border:`1px dashed ${border}`,borderRadius:14,padding:40,textAlign:'center',color:text3}},
+        e('div',{style:{fontSize:32,marginBottom:8}},'📊'),
+        e('p',{style:{fontSize:14}},"No saved portfolios yet. Run a simulation and click 'Save'.")
+      ):
+      e('div',{style:{display:'flex',flexDirection:'column',gap:10}},
+        portfolios.map(p=>{
+          const instr=p.instruments||[];
+          return e('div',{key:p.id,style:{background:card,border:`1px solid ${border}`,borderRadius:12,padding:'15px 16px'}},
+            e('div',{style:{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:8,flexWrap:'wrap'}},
+              e('div',null,
+                e('div',{style:{fontWeight:700,fontSize:14,color:text,marginBottom:2}},p.name),
+                p.description&&e('div',{style:{fontSize:12,color:text2,marginBottom:3}},p.description),
+                e('div',{style:{fontSize:11,color:text3}},instr.length+' instruments · '+new Date(p.created_at).toLocaleDateString())
+              ),
+              e('div',{style:{display:'flex',gap:6,flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end'}},
+                e('button',{onClick:()=>togglePublic(p.id,p.is_public),style:{fontSize:11,fontWeight:600,padding:'4px 10px',borderRadius:6,border:'1px solid '+(p.is_public?'rgba(0,200,150,0.4)':'rgba(255,255,255,0.1)'),background:p.is_public?'rgba(0,200,150,0.1)':'transparent',color:p.is_public?'#00C896':text2,cursor:'pointer'}},p.is_public?'🌐 Public':'🔒 Private'),
+                e('button',{onClick:()=>onLoadPortfolio(instr),style:{fontSize:11,fontWeight:600,padding:'4px 10px',borderRadius:6,border:'1px solid rgba(0,153,255,0.3)',background:'rgba(0,153,255,0.08)',color:'#0099FF',cursor:'pointer'}},'▶ Load'),
+                e('button',{onClick:()=>del(p.id),style:{fontSize:11,padding:'4px 10px',borderRadius:6,border:'1px solid rgba(255,77,77,0.2)',background:'transparent',color:'rgba(255,77,77,0.6)',cursor:'pointer'}},'✕')
+              )
+            ),
+            e('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+              instr.slice(0,6).map(ins=>e('span',{key:ins.ticker,style:{fontSize:10,padding:'2px 7px',borderRadius:4,background:'rgba(0,200,150,0.08)',color:'#00C896',border:'1px solid rgba(0,200,150,0.15)'}},ins.ticker))
+            )
+          );
+        })
+      )
+    )
+  );
+}
+
+// ── PUBLIC PROFILE PAGE ───────────────────────────────────────────────────────
+function PublicProfile({dark,username,onBack}){
+  const [profile,setProfile]=useState(null);
+  const [portfolios,setPortfolios]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [notFound,setNotFound]=useState(false);
+  const bg=dark?'#080D14':'#F4F6FA';
+  const bg2=dark?'#0A0F1A':'#FFFFFF';
+  const text=dark?'#E8EDF3':'#0D1520';
+  const text2=dark?'#5A6A7A':'#5A6A80';
+  const text3=dark?'#2A3A4A':'#9AA8B8';
+  const border=dark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)';
+  const card=dark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.02)';
+  const e=React.createElement;
+  useEffect(()=>{
+    (async()=>{
+      if(!sb){setNotFound(true);setLoading(false);return;}
+      const{data:prof}=await sb.from('profiles').select('*').eq('username',username).maybeSingle();
+      if(!prof){setNotFound(true);setLoading(false);return;}
+      setProfile(prof);
+      const{data:pf}=await sb.from('portfolios').select('*').eq('user_id',prof.id).eq('is_public',true).order('created_at',{ascending:false});
+      setPortfolios(pf||[]);setLoading(false);
+    })();
+  },[username]);
+  return e('div',{style:{minHeight:'100vh',background:bg,fontFamily:"'DM Sans',system-ui,sans-serif",color:text}},
+    e('nav',{style:{background:bg2,borderBottom:`1px solid ${border}`,padding:'0 20px',height:52,display:'flex',alignItems:'center',gap:12,position:'sticky',top:0,zIndex:100}},
+      e('button',{onClick:onBack,style:{background:'transparent',border:`1px solid ${border}`,borderRadius:8,color:text2,padding:'4px 12px',fontSize:12,cursor:'pointer'}},'← Home'),
+      e('div',{style:{fontSize:15,fontWeight:700,color:text}},'Compound',e('span',{style:{color:'#00C896'}},'Path'))
+    ),
+    loading?e('div',{style:{textAlign:'center',padding:60,color:text2}},'Loading...'):
+    notFound?e('div',{style:{textAlign:'center',padding:60}},
+      e('div',{style:{fontSize:40,marginBottom:12}},'😕'),
+      e('p',{style:{color:text2,fontSize:15}},'User @'+username+' not found')
+    ):
+    e('div',{style:{maxWidth:720,margin:'0 auto',padding:'32px 16px'}},
+      e('div',{style:{display:'flex',alignItems:'center',gap:20,marginBottom:32,flexWrap:'wrap'}},
+        e('div',{style:{width:60,height:60,borderRadius:'50%',background:'linear-gradient(135deg,#00C896,#0099FF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,fontWeight:700,color:'#000',flexShrink:0}},(profile.username||'?')[0].toUpperCase()),
+        e('div',null,
+          e('h1',{style:{fontSize:22,fontWeight:700,color:text,marginBottom:2}},'@'+profile.username),
+          e('div',{style:{fontSize:13,color:text2}},(profile.age?'Age '+profile.age+' · ':'')+portfolios.length+' public portfolio'+(portfolios.length!==1?'s':'')),
+          profile.bio&&e('p',{style:{fontSize:13,color:text2,marginTop:4}},profile.bio)
+        )
+      ),
+      e('div',{style:{fontSize:11,color:text3,textTransform:'uppercase',letterSpacing:1.5,marginBottom:14,display:'flex',alignItems:'center',gap:8}},
+        'Public Portfolios',e('span',{style:{flex:1,height:1,background:border}})
+      ),
+      portfolios.length===0?e('div',{style:{color:text3,textAlign:'center',padding:40,fontSize:13}},'No public portfolios yet'):
+      e('div',{style:{display:'flex',flexDirection:'column',gap:10}},
+        portfolios.map(p=>{
+          const instr=p.instruments||[];
+          return e('div',{key:p.id,style:{background:card,border:`1px solid ${border}`,borderRadius:12,padding:'16px 18px'}},
+            e('div',{style:{fontWeight:700,fontSize:14,color:text,marginBottom:4}},p.name),
+            p.description&&e('p',{style:{fontSize:13,color:text2,marginBottom:8,lineHeight:1.5}},p.description),
+            e('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}},
+              instr.map(ins=>e('span',{key:ins.ticker,style:{fontSize:10,padding:'2px 7px',borderRadius:4,background:'rgba(0,200,150,0.08)',color:'#00C896',border:'1px solid rgba(0,200,150,0.15)'}},ins.ticker))
+            ),
+            e('div',{style:{fontSize:11,color:text3}},instr.length+' instruments · '+new Date(p.created_at).toLocaleDateString())
+          );
+        })
+      )
+    )
+  );
+}
+
 // ── HOMEPAGE ──────────────────────────────────────────────────────────────────
 // period config: label, yfinance range, interval
 const PERIODS=[
@@ -200,7 +450,7 @@ const PERIODS=[
 // cache per periodo
 const _perfCache={};
 
-function Homepage({onOpen,dark,setDark}){
+function Homepage({onOpen,dark,setDark,user,profile,onAuthOpen,onMyPortfolios,onLogout}){
   const [tab,setTab]=useState("1d");
   const [perf,setPerf]=useState([]);
   const [loadP,setLoadP]=useState(false);
@@ -246,8 +496,19 @@ function Homepage({onOpen,dark,setDark}){
     // NAV
     e('nav',{style:{background:bg2,borderBottom:`1px solid ${border}`,padding:"0 20px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}},
       e('div',{style:{fontSize:18,fontWeight:700,letterSpacing:-0.5,color:text}},"Compound",e('span',{style:{color:"#00C896"}},"Path")),
-      e('div',{style:{display:"flex",alignItems:"center",gap:8}},
+      e('div',{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},
         e('button',{onClick:()=>{setDark(!dark);document.body.classList.toggle('light',dark)},style:{background:bg3,border:`1px solid ${border}`,color:text2,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:14}},dark?"☀️":"🌙"),
+        user
+          ?[
+            e('button',{key:'mp',onClick:onMyPortfolios,style:{background:bg3,border:`1px solid ${border}`,color:text2,borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:500}},'📁 My Portfolios'),
+            e('div',{key:'av',style:{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#00C896,#0099FF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#000',cursor:'default',title:profile?.username||user.email}},
+              (profile?.username||user.email||'?')[0].toUpperCase()
+            ),
+            e('button',{key:'lo',onClick:onLogout,style:{background:'transparent',border:`1px solid ${border}`,color:text2,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:12}},'Logout'),
+          ]
+          :[
+            sb&&e('button',{key:'li',onClick:onAuthOpen,style:{background:'transparent',border:`1px solid ${border}`,color:text2,borderRadius:8,padding:"5px 12px",cursor:"pointer",fontSize:12,fontWeight:500}},'Login / Register'),
+          ],
         e('button',{onClick:onOpen,style:{background:"#00C896",color:"#000",border:"none",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}},"Open Simulator →")
       )
     ),
@@ -340,7 +601,7 @@ function Homepage({onOpen,dark,setDark}){
 }
 
 // ── SIMULATOR ─────────────────────────────────────────────────────────────────
-function Simulator({onBack,dark}){
+function Simulator({onBack,dark,user,loadedPortfolio}){
   const [query,setQuery]=useState("");
   const [results,setResults]=useState([]);
   const [portfolio,setPortfolio]=useState([]);
@@ -348,6 +609,15 @@ function Simulator({onBack,dark}){
   const [chartData,setChartData]=useState([]);
   const [stats,setStats]=useState(null);
   const [activeTab,setActiveTab]=useState("portfolio");
+  const [showSave,setShowSave]=useState(false);
+  const [savedOk,setSavedOk]=useState(false);
+
+  // load a portfolio passed from MyPortfolios
+  useEffect(()=>{
+    if(!loadedPortfolio||!loadedPortfolio.length)return;
+    const items=loadedPortfolio.map((ins,i)=>({id:Date.now()+i,...ins,color:ins.color||COLORS[i%COLORS.length]}));
+    setPortfolio(items);setChartData([]);setStats(null);setActiveTab("portfolio");
+  },[loadedPortfolio]);
   const dropRef=useRef();
 
   const searchTimer=useRef(null);
@@ -435,10 +705,17 @@ function Simulator({onBack,dark}){
   ];
 
   return e('div',{style:{minHeight:"100vh",background:bg4,color:text,fontFamily:"'DM Sans',system-ui,sans-serif"}},
+    showSave&&user&&e(SavePortfolioModal,{dark,user,portfolio,onClose:()=>setShowSave(false),onSaved:()=>{setSavedOk(true);setTimeout(()=>setSavedOk(false),3000);}}),
     e('nav',{style:{background:bg2,borderBottom:`1px solid ${border}`,padding:"0 20px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}},
       e('div',{style:{display:"flex",alignItems:"center",gap:10}},
         e('button',{onClick:onBack,style:{background:"transparent",border:`1px solid ${border}`,borderRadius:8,color:text2,padding:"4px 12px",fontSize:12,cursor:"pointer"}},"← Home"),
         e('div',{style:{fontSize:15,fontWeight:700,letterSpacing:-0.5,color:text}},"Compound",e('span',{style:{color:"#00C896"}},"Path"),e('span',{style:{fontSize:11,color:text3,fontWeight:400,marginLeft:6}},"Simulator"))
+      ),
+      portfolio.length>0&&e('div',{style:{display:"flex",alignItems:"center",gap:8}},
+        savedOk&&e('span',{style:{fontSize:12,color:"#00C896"}},'✓ Saved!'),
+        user
+          ?e('button',{onClick:()=>setShowSave(true),style:{background:"rgba(0,200,150,0.1)",border:"1px solid rgba(0,200,150,0.3)",borderRadius:8,color:"#00C896",padding:"4px 12px",fontSize:12,fontWeight:600,cursor:"pointer"}},'💾 Save Portfolio')
+          :sb&&e('span',{style:{fontSize:11,color:text3}},'Login to save')
       )
     ),
     e('div',{style:{maxWidth:860,margin:"0 auto",padding:"24px 16px"}},
@@ -533,11 +810,58 @@ function Simulator({onBack,dark}){
 
 // ── APP ───────────────────────────────────────────────────────────────────────
 function App(){
-  const [page,setPage]=useState("home");
+  const [page,setPage]=useState(()=>{
+    // check ?profile=username in URL
+    const u=new URLSearchParams(window.location.search).get('profile');
+    return u?'public:'+u:'home';
+  });
   const [dark,setDark]=useState(true);
-  return page==="simulator"
-    ?React.createElement(Simulator,{onBack:()=>setPage("home"),dark})
-    :React.createElement(Homepage,{onOpen:()=>setPage("simulator"),dark,setDark});
+  const [user,setUser]=useState(null);
+  const [profile,setProfile]=useState(null);
+  const [showAuth,setShowAuth]=useState(false);
+  const [loadedPortfolio,setLoadedPortfolio]=useState(null);
+
+  useEffect(()=>{
+    if(!sb)return;
+    sb.auth.getSession().then(({data})=>{
+      if(data.session?.user)fetchProfile(data.session.user);
+    });
+    const{data:{subscription}}=sb.auth.onAuthStateChange((_,session)=>{
+      if(session?.user)fetchProfile(session.user);else{setUser(null);setProfile(null);}
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  async function fetchProfile(u){
+    setUser(u);
+    const{data}=await sb.from('profiles').select('*').eq('id',u.id).maybeSingle();
+    setProfile(data);
+  }
+
+  async function logout(){
+    await sb.auth.signOut();setUser(null);setProfile(null);
+  }
+
+  // route: public profile pages
+  if(page.startsWith('public:')){
+    const username=page.slice(7);
+    return React.createElement(PublicProfile,{dark,username,onBack:()=>setPage('home')});
+  }
+
+  return React.createElement(React.Fragment,null,
+    showAuth&&sb&&React.createElement(AuthModal,{dark,onClose:()=>setShowAuth(false),onAuth:()=>{}}),
+    page==='simulator'
+      ?React.createElement(Simulator,{onBack:()=>setPage('home'),dark,user,loadedPortfolio})
+      :page==='my-portfolios'&&user
+        ?React.createElement(MyPortfolios,{dark,user,profile,onBack:()=>setPage('home'),onLoadPortfolio:(instr)=>{setLoadedPortfolio(instr);setPage('simulator');}})
+        :React.createElement(Homepage,{
+            onOpen:()=>setPage('simulator'),
+            dark,setDark,user,profile,
+            onAuthOpen:()=>setShowAuth(true),
+            onMyPortfolios:()=>setPage('my-portfolios'),
+            onLogout:logout,
+          })
+  );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
