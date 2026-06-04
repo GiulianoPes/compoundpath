@@ -158,8 +158,9 @@ function SimpleChart({data,series,darkMode}){
       ctx.lineTo(pts[pts.length-1].x,PAD.top+cH);
       ctx.closePath();
       const grad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);
-      grad.addColorStop(0,s.color+"40");
-      grad.addColorStop(1,s.color+"00");
+      const toAlpha=(c,a)=>c.startsWith('#')?c+a:c.replace(/[\d.]+\)$/,parseFloat("0x"+a)/255+")");
+      grad.addColorStop(0,toAlpha(s.color,"40"));
+      grad.addColorStop(1,toAlpha(s.color,"00"));
       ctx.fillStyle=grad;ctx.fill();
       // line
       ctx.beginPath();ctx.strokeStyle=s.color;ctx.lineWidth=s.width||2;ctx.lineJoin="round";
@@ -193,11 +194,10 @@ function Homepage({onOpen,lang,setLang,dark,setDark}){
     const res=[];
     for(const inst of PERFORMERS){
       try{
-        const url=`https://query1.finance.yahoo.com/v8/finance/chart/${inst.ticker}?interval=${interval}&range=${range}`;
-        const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-        const j=await r.json();
-        const d=JSON.parse(j.contents);
-        const closes=d.chart.result[0].indicators.quote[0].close.filter(Boolean);
+        const r=await fetch(`/api/chart?ticker=${inst.ticker}&interval=${interval}&range=${range}`);
+        const d=await r.json();
+        if(!d.closes||d.closes.length<2)continue;
+        const closes=d.closes.filter(Boolean);
         if(closes.length<2)continue;
         const chg=((closes[closes.length-1]-closes[0])/closes[0])*100;
         res.push({...inst,price:closes[closes.length-1],chg,spark:closes.slice(-20)});
@@ -307,12 +307,11 @@ function Simulator({onBack,lang,setLang,dark}){
     const fetched=await Promise.all(portfolio.map(async(inst)=>{
       try{
         const startTs=Math.floor(new Date(`${inst.startDate}T${inst.startTime}:00`).getTime()/1000);
-        const url=`https://query1.finance.yahoo.com/v8/finance/chart/${inst.ticker}?interval=1mo&period1=${startTs}&period2=${Math.floor(Date.now()/1000)}`;
-        const r=await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`);
-        const j=await r.json();
-        const parsed=JSON.parse(j.contents);
-        const ts=parsed.chart.result[0].timestamp;
-        const closes=parsed.chart.result[0].indicators.quote[0].close;
+        const r=await fetch(`/api/chart?ticker=${inst.ticker}&interval=1mo&period1=${startTs}&period2=${Math.floor(Date.now()/1000)}`);
+        const parsed=await r.json();
+        if(!parsed.timestamps)throw new Error(parsed.error||"no data");
+        const ts=parsed.timestamps;
+        const closes=parsed.closes;
         let shares=0,totalInvested=0;
         const monthly=[];
         for(let i=0;i<ts.length;i++){
