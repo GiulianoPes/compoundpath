@@ -3,6 +3,10 @@
     "api/chart.py": {
       "runtime": "python3.12",
       "maxDuration": 30
+    },
+    "api/search.py": {
+      "runtime": "python3.12",
+      "maxDuration": 15
     }
   }
 }
