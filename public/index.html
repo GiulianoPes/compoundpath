@@ -408,9 +408,9 @@ function App(){
 
       // CENTER — SIMULATOR
       e("div",{style:{background:dark?"rgba(255,255,255,0.015)":"rgba(0,0,0,0.015)",border:"1px solid "+border,borderRadius:12,padding:"14px",overflowY:"auto",maxHeight:"calc(100vh - 90px)"}},
-        e("div",{style:{marginBottom:10}},
-          e("h2",{style:{fontSize:16,fontWeight:700,letterSpacing:-0.3,marginBottom:2,color:text}},t.simTitle),
-          e("p",{style:{color:text2,fontSize:11}},t.simSub)
+        e("div",{style:{marginBottom:10,textAlign:"center"}},
+          e("h2",{style:{fontSize:18,fontWeight:700,letterSpacing:-0.5,marginBottom:4,color:text}},t.simTitle),
+          e("p",{style:{color:text2,fontSize:12}},t.simSub)
         ),
         e(SimCore,{t,dark,externalInst:simInst})
       ),
