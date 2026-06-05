@@ -358,7 +358,7 @@ function App(){
     showOnb&&e(Onboarding,{t,onDone:()=>setShowOnb(false),dark}),
 
     // NAVBAR
-    e("nav",{style:{background:bg2,borderBottom:"1px solid "+border,padding:"0 16px",height:54,display:"flex",alignItems:"center",gap:10,position:"sticky",top:0,zIndex:100}},
+    e("nav",{style:{background:bg2,borderBottom:"1px solid "+border,padding:"0 16px",height:54,position:"sticky",top:0,zIndex:100}},e("div",{style:{maxWidth:1300,margin:"0 auto",display:"flex",alignItems:"center",gap:10,height:"100%"}},
       e("div",{style:{fontSize:16,fontWeight:700,letterSpacing:-0.5,color:text,flexShrink:0}},"Compound",e("span",{style:{color:"#00C896"}},"Path")),
       e("div",{style:{flex:1,position:"relative",maxWidth:380},ref:gRef},
         e("div",{style:{position:"relative"}},
@@ -376,10 +376,10 @@ function App(){
         e("select",{value:lang,onChange:ev=>setLang(ev.target.value),style:{background:bg3,border:"1px solid "+border,color:text,borderRadius:7,padding:"4px 7px",fontSize:11,cursor:"pointer",outline:"none"}},LANGS.map(l=>e("option",{key:l,value:l},FLAGS[l]+" "+l.toUpperCase()))),
         e("button",{onClick:()=>{setDark(!dark);document.body.classList.toggle("light",dark)},style:{background:bg3,border:"1px solid "+border,color:text2,borderRadius:7,padding:"5px 8px",cursor:"pointer",fontSize:12}},dark?"☀️":"🌙")
       )
-    ),
+    )),
 
     // LIVE BADGE
-    e("div",{style:{padding:"8px 16px",display:"flex",alignItems:"center",gap:5}},
+    e("div",{style:{padding:"8px 16px",maxWidth:1300,margin:"0 auto",display:"flex",alignItems:"center",gap:5}},
       e("span",{style:{width:5,height:5,borderRadius:"50%",background:"#00C896",display:"inline-block",animation:"blink 2s infinite"}}),
       e("span",{style:{fontSize:10,color:"#00C896",letterSpacing:1.5,textTransform:"uppercase",fontWeight:600}},t.liveMarkets)
     ),
