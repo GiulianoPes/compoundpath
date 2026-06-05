@@ -253,11 +253,8 @@ function Simulator({onBack,lang,setLang,dark}){
   useEffect(()=>{
     const local=searchCat(query);
     setResults(local);
-    // If no local results and looks like ISIN, try live lookup
     if(local.length===0&&query.length>=12){
-      lookupISIN(query).then(found=>{
-        if(found)setResults([found]);
-      });
+      lookupISIN(query).then(found=>{if(found)setResults([found]);});
     }
   },[query]);
   useEffect(()=>{function h(e){if(dropRef.current&&!dropRef.current.contains(e.target))setResults([]);}document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
