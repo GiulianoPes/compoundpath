@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CompoundPath — PAC Portfolio Simulator</title>
+<meta name="description" content="Simulate your PAC portfolio with real historical data."/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',system-ui,sans-serif;background:#080D14;color:#E8EDF3;min-height:100vh}
+body.light{background:#F4F6FA;color:#0D1520}
+input[type=date],input[type=time]{color-scheme:dark}
+body.light input[type=date],body.light input[type=time]{color-scheme:light}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+canvas{display:block}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const {useState,useEffect,useCallback,useRef}=React;
+
+// ── API CALL (uses our Vercel proxy) ─────────────────────────────────────────
+async function fetchYahoo(params){
+  const qs=new URLSearchParams(params).toString();
+  const res=await fetch(`/api/yahoo?${qs}`);
+  if(!res.ok)throw new Error("API error "+res.status);
+  return res.json();
+}
+
+const T={
+  en:{liveMarkets:"Live Markets",heroTitle:"Build wealth with",heroSpan:"compound investing",heroSub:"Simulate your PAC portfolio with real historical data. Any ETF, stock, or fund — by ISIN, ticker, or name.",startSimulating:"Start Simulating →",learnMore:"Learn More",latestNews:"Latest Financial News",topPerformers:"Top Performers",today:"Today",month:"Month",year:"Year",toolTitle:"PAC Portfolio Simulator",toolDesc:"Search by ISIN, ticker or name. Build your full portfolio. See real historical returns.",openSimulator:"Open Simulator →",disclaimer:"Data from Yahoo Finance · Not financial advice",simTitle:"PAC Portfolio Simulator",simSubtitle:"Real historical data · Any ETF, stock, fund or crypto",searchPlaceholder:"Search by ISIN, ticker or name (e.g. IE00B4L5Y983, IWDA, MSCI World)...",portfolio:"My Portfolio",emptyPortfolio:"Search and add instruments above to start simulating",startDate:"Start date",time:"Time",monthly:"Monthly (€)",simulate:"Simulate",simulating:"Loading data...",totalInvested:"Total Invested",currentValue:"Current Value",totalGain:"Total Gain",annualReturn:"Annual Return",years:"yrs",simDisclaimer:"Based on real historical prices · Not financial advice · Past performance does not guarantee future results",backHome:"← Home",invested:"Invested",value:"Value"},
+  it:{liveMarkets:"Mercati Live",heroTitle:"Costruisci ricchezza con",heroSpan:"l'investimento composto",heroSub:"Simula il tuo portafoglio PAC con dati storici reali. Qualsiasi ETF, azione o fondo — per ISIN, ticker o nome.",startSimulating:"Inizia a simulare →",learnMore:"Scopri di più",latestNews:"Ultime Notizie Finanziarie",topPerformers:"Migliori Performer",today:"Oggi",month:"Mese",year:"Anno",toolTitle:"Simulatore PAC",toolDesc:"Cerca per ISIN, ticker o nome. Costruisci il tuo portafoglio. Vedi i rendimenti storici reali.",openSimulator:"Apri il Simulatore →",disclaimer:"Dati da Yahoo Finance · Non è consulenza finanziaria",simTitle:"Simulatore PAC Portfolio",simSubtitle:"Dati storici reali · Qualsiasi ETF, azione, fondo o crypto",searchPlaceholder:"Cerca per ISIN, ticker o nome (es. IE00B4L5Y983, IWDA)...",portfolio:"Il mio Portfolio",emptyPortfolio:"Cerca e aggiungi strumenti sopra per iniziare",startDate:"Data inizio",time:"Orario",monthly:"Mensile (€)",simulate:"Simula",simulating:"Carico dati...",totalInvested:"Totale Investito",currentValue:"Valore Attuale",totalGain:"Guadagno Totale",annualReturn:"Rendimento Annuo",years:"anni",simDisclaimer:"Basato su prezzi storici reali · Non è consulenza finanziaria",backHome:"← Home",invested:"Investito",value:"Valore"},
+  es:{liveMarkets:"Mercados en vivo",heroTitle:"Construye riqueza con",heroSpan:"inversión compuesta",heroSub:"Simula tu cartera PAC con datos históricos reales.",startSimulating:"Empezar →",learnMore:"Más información",latestNews:"Últimas Noticias",topPerformers:"Mejores Rendimientos",today:"Hoy",month:"Mes",year:"Año",toolTitle:"Simulador PAC",toolDesc:"Busca por ISIN, ticker o nombre.",openSimulator:"Abrir →",disclaimer:"No es asesoramiento financiero",simTitle:"Simulador PAC",simSubtitle:"Datos históricos reales",searchPlaceholder:"Buscar por ISIN, ticker o nombre...",portfolio:"Mi Cartera",emptyPortfolio:"Busca y añade instrumentos",startDate:"Fecha inicio",time:"Hora",monthly:"Mensual (€)",simulate:"Simular",simulating:"Cargando...",totalInvested:"Total Invertido",currentValue:"Valor Actual",totalGain:"Ganancia",annualReturn:"Rentabilidad Anual",years:"años",simDisclaimer:"No es asesoramiento financiero",backHome:"← Inicio",invested:"Invertido",value:"Valor"},
+  fr:{liveMarkets:"Marchés en direct",heroTitle:"Construisez votre patrimoine avec",heroSpan:"l'investissement composé",heroSub:"Simulez votre portefeuille PAC avec des données historiques réelles.",startSimulating:"Commencer →",learnMore:"En savoir plus",latestNews:"Dernières actualités",topPerformers:"Meilleurs Performers",today:"Aujourd'hui",month:"Mois",year:"An",toolTitle:"Simulateur PAC",toolDesc:"Recherchez par ISIN, ticker ou nom.",openSimulator:"Ouvrir →",disclaimer:"Pas de conseil financier",simTitle:"Simulateur PAC",simSubtitle:"Données historiques réelles",searchPlaceholder:"Rechercher par ISIN, ticker ou nom...",portfolio:"Mon Portefeuille",emptyPortfolio:"Recherchez et ajoutez des instruments",startDate:"Date de début",time:"Heure",monthly:"Mensuel (€)",simulate:"Simuler",simulating:"Chargement...",totalInvested:"Total Investi",currentValue:"Valeur Actuelle",totalGain:"Gain Total",annualReturn:"Rendement Annuel",years:"ans",simDisclaimer:"Pas de conseil financier",backHome:"← Accueil",invested:"Investi",value:"Valeur"},
+  de:{liveMarkets:"Live-Märkte",heroTitle:"Vermögen aufbauen mit",heroSpan:"Zinseszins-Investing",heroSub:"Simulieren Sie Ihr PAC-Portfolio mit echten historischen Daten.",startSimulating:"Starten →",learnMore:"Mehr erfahren",latestNews:"Aktuelle Nachrichten",topPerformers:"Top Performer",today:"Heute",month:"Monat",year:"Jahr",toolTitle:"PAC Simulator",toolDesc:"Suchen nach ISIN, Ticker oder Name.",openSimulator:"Öffnen →",disclaimer:"Keine Finanzberatung",simTitle:"PAC Portfolio Simulator",simSubtitle:"Echte historische Daten",searchPlaceholder:"Suchen nach ISIN, Ticker oder Name...",portfolio:"Mein Portfolio",emptyPortfolio:"Instrumente suchen und hinzufügen",startDate:"Startdatum",time:"Uhrzeit",monthly:"Monatlich (€)",simulate:"Simulieren",simulating:"Laden...",totalInvested:"Gesamt Investiert",currentValue:"Aktueller Wert",totalGain:"Gesamtgewinn",annualReturn:"Jährliche Rendite",years:"J.",simDisclaimer:"Keine Finanzberatung",backHome:"← Start",invested:"Investiert",value:"Wert"},
+  pt:{liveMarkets:"Mercados ao vivo",heroTitle:"Construa riqueza com",heroSpan:"investimento composto",heroSub:"Simule seu portfólio PAC com dados históricos reais.",startSimulating:"Começar →",learnMore:"Saiba mais",latestNews:"Últimas Notícias",topPerformers:"Melhores Desempenhos",today:"Hoje",month:"Mês",year:"Ano",toolTitle:"Simulador PAC",toolDesc:"Pesquise por ISIN, ticker ou nome.",openSimulator:"Abrir →",disclaimer:"Não é consultoria",simTitle:"Simulador PAC",simSubtitle:"Dados históricos reais",searchPlaceholder:"Pesquisar por ISIN, ticker ou nome...",portfolio:"Minha Carteira",emptyPortfolio:"Pesquise e adicione instrumentos",startDate:"Data início",time:"Hora",monthly:"Mensal (€)",simulate:"Simular",simulating:"Carregando...",totalInvested:"Total Investido",currentValue:"Valor Atual",totalGain:"Ganho Total",annualReturn:"Retorno Anual",years:"anos",simDisclaimer:"Não é consultoria financeira",backHome:"← Início",invested:"Investido",value:"Valor"},
+  nl:{liveMarkets:"Live markten",heroTitle:"Bouw vermogen op met",heroSpan:"samengesteld beleggen",heroSub:"Simuleer uw PAC-portefeuille met echte historische data.",startSimulating:"Starten →",learnMore:"Meer info",latestNews:"Laatste Nieuws",topPerformers:"Beste Presteerders",today:"Vandaag",month:"Maand",year:"Jaar",toolTitle:"PAC Simulator",toolDesc:"Zoek op ISIN, ticker of naam.",openSimulator:"Openen →",disclaimer:"Geen financieel advies",simTitle:"PAC Portefeuille Simulator",simSubtitle:"Echte historische data",searchPlaceholder:"Zoeken op ISIN, ticker of naam...",portfolio:"Mijn Portefeuille",emptyPortfolio:"Zoek en voeg instrumenten toe",startDate:"Startdatum",time:"Tijd",monthly:"Maandelijks (€)",simulate:"Simuleren",simulating:"Laden...",totalInvested:"Totaal Geïnvesteerd",currentValue:"Huidige Waarde",totalGain:"Totale Winst",annualReturn:"Jaarlijks Rendement",years:"j.",simDisclaimer:"Geen financieel advies",backHome:"← Home",invested:"Geïnvesteerd",value:"Waarde"},
+};
+
+const FLAGS={en:"🇬🇧",it:"🇮🇹",es:"🇪🇸",fr:"🇫🇷",de:"🇩🇪",pt:"🇵🇹",nl:"🇳🇱"};
+const LANGS=["en","it","es","fr","de","pt","nl"];
+const COLORS=["#00C896","#0099FF","#FF6B35","#A855F7","#F59E0B","#EC4899","#06B6D4","#84CC16"];
+const TYPE_COLOR={ETF:"#00C896",Stock:"#0099FF",Crypto:"#F59E0B",Index:"#A855F7"};
+
+const CATALOGUE=[
+  {ticker:"IWDA.AS",isin:"IE00B4L5Y983",name:"iShares Core MSCI World ETF",type:"ETF"},
+  {ticker:"VWCE.DE",isin:"IE00BK5BQT80",name:"Vanguard FTSE All-World ETF",type:"ETF"},
+  {ticker:"CSPX.L",isin:"IE00B5BMR087",name:"iShares Core S&P 500 ETF",type:"ETF"},
+  {ticker:"EIMI.L",isin:"IE00BKM4GZ66",name:"iShares MSCI EM IMI ETF",type:"ETF"},
+  {ticker:"AGGH.L",isin:"IE00BDBRDM35",name:"iShares Global Aggregate Bond",type:"ETF"},
+  {ticker:"IUSN.DE",isin:"IE00BF4RFH31",name:"iShares MSCI World Small Cap",type:"ETF"},
+  {ticker:"XDWD.DE",isin:"IE00BJ0KDQ92",name:"Xtrackers MSCI World ETF",type:"ETF"},
+  {ticker:"VUSA.L",isin:"IE00B3XXRP09",name:"Vanguard S&P 500 ETF",type:"ETF"},
+  {ticker:"AAPL",isin:"US0378331005",name:"Apple Inc.",type:"Stock"},
+  {ticker:"MSFT",isin:"US5949181045",name:"Microsoft Corporation",type:"Stock"},
+  {ticker:"GOOGL",isin:"US02079K3059",name:"Alphabet Inc.",type:"Stock"},
+  {ticker:"AMZN",isin:"US0231351067",name:"Amazon.com Inc.",type:"Stock"},
+  {ticker:"NVDA",isin:"US67066G1040",name:"NVIDIA Corporation",type:"Stock"},
+  {ticker:"BTC-USD",isin:"—",name:"Bitcoin",type:"Crypto"},
+  {ticker:"ETH-USD",isin:"—",name:"Ethereum",type:"Crypto"},
+  {ticker:"GLD",isin:"US78463V1070",name:"SPDR Gold Shares",type:"ETF"},
+];
+
+const PERFORMERS=[
+  {ticker:"IWDA.AS",name:"MSCI World"},
+  {ticker:"VWCE.DE",name:"All-World"},
+  {ticker:"CSPX.L",name:"S&P 500"},
+  {ticker:"AAPL",name:"Apple"},
+  {ticker:"MSFT",name:"Microsoft"},
+  {ticker:"BTC-USD",name:"Bitcoin"},
+];
+
+const NEWS=[
+  {source:"Reuters",title:"Global markets rally as Fed signals pause on rate hikes",time:"2h ago",url:"https://reuters.com/markets"},
+  {source:"Financial Times",title:"ETF inflows hit record high amid retail investor surge",time:"3h ago",url:"https://ft.com/markets"},
+  {source:"Bloomberg",title:"European equities outperform as inflation data improves",time:"4h ago",url:"https://bloomberg.com/markets"},
+  {source:"CNBC",title:"S&P 500 approaches all-time high amid tech sector strength",time:"5h ago",url:"https://cnbc.com"},
+  {source:"Il Sole 24 Ore",title:"Borse europee positive: Piazza Affari guadagna l'1,2%",time:"6h ago",url:"https://ilsole24ore.com"},
+  {source:"Seeking Alpha",title:"MSCI World ETF sees strongest weekly inflow since 2023",time:"7h ago",url:"https://seekingalpha.com"},
+];
+
+function fmtEur(n){return new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(n);}
+function fmtPct(n){return(n>=0?"+":"")+n.toFixed(2)+"%";}
+function searchCat(q){if(!q||q.length<2)return[];const lq=q.toLowerCase();return CATALOGUE.filter(i=>i.ticker.toLowerCase().includes(lq)||i.isin.toLowerCase().includes(lq)||i.name.toLowerCase().includes(lq)).slice(0,8);}
+
+function Sparkline({data,color}){
+  const ref=useRef();
+  useEffect(()=>{
+    if(!ref.current||!data||data.length<2)return;
+    const c=ref.current,ctx=c.getContext("2d"),w=c.width,h=c.height;
+    ctx.clearRect(0,0,w,h);
+    const min=Math.min(...data),max=Math.max(...data),range=max-min||1;
+    ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.lineJoin="round";
+    data.forEach((v,i)=>{const x=(i/(data.length-1))*w,y=h-((v-min)/range)*(h-4)-2;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+    ctx.stroke();
+  },[data,color]);
+  return React.createElement('canvas',{ref,width:120,height:36,style:{width:"100%",height:36}});
+}
+
+function SimpleChart({data,series,darkMode}){
+  const ref=useRef();
+  useEffect(()=>{
+    if(!ref.current||!data||data.length<2)return;
+    const canvas=ref.current,ctx=canvas.getContext("2d");
+    const W=canvas.width,H=canvas.height;
+    const PAD={top:10,right:10,bottom:30,left:50};
+    const cW=W-PAD.left-PAD.right,cH=H-PAD.top-PAD.bottom;
+    ctx.clearRect(0,0,W,H);
+    const textCol=darkMode?"#3A4A5A":"#9AA8B8";
+    const gridCol=darkMode?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.06)";
+    let allVals=[];
+    series.forEach(s=>data.forEach(d=>{if(d[s.key]!=null)allVals.push(d[s.key]);}));
+    const minV=Math.min(...allVals),maxV=Math.max(...allVals),range=maxV-minV||1;
+    const toX=i=>PAD.left+(i/(data.length-1))*cW;
+    const toY=v=>PAD.top+cH-((v-minV)/range)*cH;
+    for(let i=0;i<=4;i++){
+      const y=PAD.top+(i/4)*cH;
+      ctx.beginPath();ctx.strokeStyle=gridCol;ctx.lineWidth=1;ctx.moveTo(PAD.left,y);ctx.lineTo(PAD.left+cW,y);ctx.stroke();
+      const val=maxV-((maxV-minV)*i/4);
+      ctx.fillStyle=textCol;ctx.font="10px DM Sans,sans-serif";ctx.textAlign="right";
+      ctx.fillText((val/1000).toFixed(0)+"k",PAD.left-6,y+3);
+    }
+    const step=Math.max(1,Math.floor(data.length/6));
+    data.forEach((d,i)=>{if(i%step===0){ctx.fillStyle=textCol;ctx.font="10px DM Sans,sans-serif";ctx.textAlign="center";ctx.fillText(d.label,toX(i),H-8);}});
+    series.forEach(s=>{
+      const pts=data.map((d,i)=>({x:toX(i),y:d[s.key]!=null?toY(d[s.key]):null})).filter(p=>p.y!=null);
+      if(pts.length<2)return;
+      ctx.beginPath();ctx.moveTo(pts[0].x,PAD.top+cH);pts.forEach(p=>ctx.lineTo(p.x,p.y));ctx.lineTo(pts[pts.length-1].x,PAD.top+cH);ctx.closePath();
+      const grad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);grad.addColorStop(0,s.color+"40");grad.addColorStop(1,s.color+"00");ctx.fillStyle=grad;ctx.fill();
+      ctx.beginPath();ctx.strokeStyle=s.color;ctx.lineWidth=s.width||2;ctx.lineJoin="round";
+      if(s.dash)ctx.setLineDash([4,4]);else ctx.setLineDash([]);
+      pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);
+    });
+  },[data,series,darkMode]);
+  return React.createElement('canvas',{ref,width:800,height:280,style:{width:"100%",height:280}});
+}
+
+function Homepage({onOpen,lang,setLang,dark,setDark}){
+  const t=T[lang]||T.en;
+  const [tab,setTab]=useState("1d");
+  const [perf,setPerf]=useState([]);
+  const [loadP,setLoadP]=useState(false);
+  const bg=dark?"#080D14":"#F4F6FA",bg2=dark?"#0A0F1A":"#FFFFFF",bg3=dark?"#0F1726":"#EEF1F7";
+  const text=dark?"#E8EDF3":"#0D1520",text2=dark?"#5A6A7A":"#5A6A80",text3=dark?"#2A3A4A":"#9AA8B8";
+  const border=dark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.07)",card=dark?"rgba(255,255,255,0.03)":"rgba(0,0,0,0.02)";
+
+  async function loadPerf(period){
+    setLoadP(true);setPerf([]);
+    const range=period==="1d"?"1d":period==="1mo"?"1mo":"1y";
+    const interval=period==="1d"?"5m":period==="1mo"?"1d":"1wk";
+    const res=[];
+    for(const inst of PERFORMERS){
+      try{
+        const data=await fetchYahoo({ticker:inst.ticker,interval,range});
+        const closes=data.chart.result[0].indicators.quote[0].close.filter(Boolean);
+        if(closes.length<2)continue;
+        const chg=((closes[closes.length-1]-closes[0])/closes[0])*100;
+        res.push({...inst,price:closes[closes.length-1],chg,spark:closes.slice(-20)});
+      }catch(e){}
+    }
+    res.sort((a,b)=>b.chg-a.chg);setPerf(res);setLoadP(false);
+  }
+  useEffect(()=>{loadPerf("1d");},[]);
+  const e=React.createElement;
+  return e('div',{style:{minHeight:"100vh",background:bg,color:text,fontFamily:"'DM Sans',system-ui,sans-serif"}},
+    e('nav',{style:{background:bg2,borderBottom:`1px solid ${border}`,padding:"0 20px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}},
+      e('div',{style:{fontSize:18,fontWeight:700,letterSpacing:-0.5,color:text}},"Compound",e('span',{style:{color:"#00C896"}},"Path")),
+      e('div',{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},
+        e('select',{value:lang,onChange:ev=>setLang(ev.target.value),style:{background:bg3,border:`1px solid ${border}`,color:text,borderRadius:8,padding:"5px 8px",fontSize:12,cursor:"pointer",outline:"none"}},LANGS.map(l=>e('option',{key:l,value:l},FLAGS[l]+" "+l.toUpperCase()))),
+        e('button',{onClick:()=>{setDark(!dark);document.body.classList.toggle('light',dark)},style:{background:bg3,border:`1px solid ${border}`,color:text2,borderRadius:8,padding:"5px 10px",cursor:"pointer",fontSize:14}},dark?"☀️":"🌙"),
+        e('button',{onClick:onOpen,style:{background:"#00C896",color:"#000",border:"none",borderRadius:8,padding:"7px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}},t.openSimulator)
+      )
+    ),
+    e('div',{style:{padding:"52px 24px 36px",maxWidth:900,margin:"0 auto",textAlign:"center"}},
+      e('div',{style:{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(0,200,150,0.1)",border:"1px solid rgba(0,200,150,0.2)",borderRadius:100,padding:"4px 14px",fontSize:11,color:"#00C896",letterSpacing:1.5,textTransform:"uppercase",marginBottom:20}},
+        e('span',{style:{width:6,height:6,borderRadius:"50%",background:"#00C896",display:"inline-block",animation:"blink 2s infinite"}}),t.liveMarkets),
+      e('h1',{style:{fontSize:"clamp(24px,5vw,42px)",fontWeight:700,letterSpacing:-1,lineHeight:1.15,marginBottom:14,color:text}},t.heroTitle+" ",e('span',{style:{color:"#00C896"}},t.heroSpan)),
+      e('p',{style:{color:text2,fontSize:"clamp(14px,2vw,16px)",maxWidth:520,margin:"0 auto 28px",lineHeight:1.6}},t.heroSub),
+      e('div',{style:{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}},
+        e('button',{onClick:onOpen,style:{background:"#00C896",color:"#000",border:"none",borderRadius:12,padding:"12px 26px",fontSize:15,fontWeight:700,cursor:"pointer"}},t.startSimulating),
+        e('button',{style:{background:card,border:`1px solid ${border}`,color:text,borderRadius:12,padding:"12px 26px",fontSize:15,cursor:"pointer"}},t.learnMore)
+      )
+    ),
+    e('div',{style:{maxWidth:900,margin:"0 auto",padding:"0 24px 28px"}},
+      e('div',{style:{fontSize:11,color:text3,textTransform:"uppercase",letterSpacing:1.5,marginBottom:14,display:"flex",alignItems:"center",gap:8}},t.latestNews,e('span',{style:{flex:1,height:1,background:border}})),
+      e('div',{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(250px,1fr))",gap:10}},
+        NEWS.map((n,i)=>e('a',{key:i,href:n.url,target:"_blank",rel:"noopener noreferrer",style:{textDecoration:"none"}},
+          e('div',{style:{background:card,border:`1px solid ${border}`,borderRadius:12,padding:14,cursor:"pointer",transition:"border-color 0.2s"},onMouseEnter:ev=>ev.currentTarget.style.borderColor="rgba(0,200,150,0.3)",onMouseLeave:ev=>ev.currentTarget.style.borderColor=border},
+            e('div',{style:{fontSize:10,color:"#00C896",textTransform:"uppercase",letterSpacing:1,marginBottom:5}},n.source),
+            e('div',{style:{fontSize:13,fontWeight:500,color:text,lineHeight:1.4,marginBottom:6}},n.title),
+            e('div',{style:{fontSize:11,color:text3}},n.time)
+          )
+        ))
+      )
+    ),
+    e('div',{style:{maxWidth:900,margin:"0 auto",padding:"0 24px 28px"}},
+      e('div',{style:{fontSize:11,color:text3,textTransform:"uppercase",letterSpacing:1.5,marginBottom:14,display:"flex",alignItems:"center",gap:8}},t.topPerformers,e('span',{style:{flex:1,height:1,background:border}})),
+      e('div',{style:{display:"flex",gap:4,background:bg3,borderRadius:10,padding:4,marginBottom:14,width:"fit-content"}},
+        [["1d",t.today],["1mo",t.month],["1y",t.year]].map(([v,l])=>e('button',{key:v,onClick:()=>{setTab(v);loadPerf(v)},style:{background:tab===v?"#00C896":"transparent",border:"none",borderRadius:8,color:tab===v?"#000":text2,padding:"6px 16px",fontSize:12,fontWeight:600,cursor:"pointer"}},l))
+      ),
+      loadP?e('div',{style:{color:text3,fontSize:13,padding:"16px 0",display:"flex",alignItems:"center",gap:8}},e('span',{style:{width:14,height:14,border:"2px solid rgba(0,200,150,0.2)",borderTop:"2px solid #00C896",borderRadius:"50%",display:"inline-block",animation:"spin 0.7s linear infinite"}}),"Loading..."):
+      e('div',{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:10}},
+        perf.map(r=>{const up=r.chg>=0;return e('div',{key:r.ticker,style:{background:card,border:`1px solid ${border}`,borderRadius:12,padding:14}},
+          e('div',{style:{fontSize:11,color:text3,marginBottom:2}},r.ticker),
+          e('div',{style:{fontSize:13,fontWeight:600,color:text,marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},r.name),
+          e(Sparkline,{data:r.spark,color:up?"#00C896":"#FF4D4D"}),
+          e('div',{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}},
+            e('span',{style:{fontSize:15,fontWeight:700,color:text}},"$"+(r.price<10?r.price.toFixed(2):r.price.toFixed(0))),
+            e('span',{style:{fontSize:12,fontWeight:600,padding:"2px 8px",borderRadius:6,background:up?"rgba(0,200,150,0.12)":"rgba(255,77,77,0.12)",color:up?"#00C896":"#FF4D4D"}},(up?"+":"")+r.chg.toFixed(2)+"%")
+          )
+        );})
+      )
+    ),
+    e('div',{style:{maxWidth:900,margin:"0 auto 36px",padding:"0 24px"}},
+      e('div',{style:{background:dark?"rgba(0,200,150,0.05)":"rgba(0,200,150,0.08)",border:"1px solid rgba(0,200,150,0.2)",borderRadius:16,padding:"24px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:16}},
+        e('div',null,e('h3',{style:{fontSize:17,fontWeight:700,marginBottom:5,color:text}},"📊 "+t.toolTitle),e('p',{style:{fontSize:13,color:text2}},t.toolDesc)),
+        e('button',{onClick:onOpen,style:{background:"#00C896",color:"#000",border:"none",borderRadius:10,padding:"12px 22px",fontSize:14,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}},t.openSimulator)
+      )
+    ),
+    e('div',{style:{borderTop:`1px solid ${border}`,padding:"18px 24px",textAlign:"center",color:text3,fontSize:11}},"© 2025 CompoundPath · "+t.disclaimer)
+  );
+}
+
+function Simulator({onBack,lang,setLang,dark}){
+  const t=T[lang]||T.en;
+  const [query,setQuery]=useState("");
+  const [results,setResults]=useState([]);
+  const [portfolio,setPortfolio]=useState([]);
+  const [simulating,setSimulating]=useState(false);
+  const [chartData,setChartData]=useState([]);
+  const [stats,setStats]=useState(null);
+  const [activeTab,setActiveTab]=useState("portfolio");
+  const dropRef=useRef();
+  useEffect(()=>{setResults(searchCat(query));},[query]);
+  useEffect(()=>{function h(e){if(dropRef.current&&!dropRef.current.contains(e.target))setResults([]);}document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
+  function addInst(inst){if(portfolio.find(p=>p.ticker===inst.ticker))return;setPortfolio(prev=>[...prev,{id:Date.now(),...inst,monthly:100,startDate:"2015-01-01",startTime:"09:30",color:COLORS[prev.length%COLORS.length]}]);setQuery("");setResults([]);setChartData([]);setStats(null);}
+  function removeInst(id){setPortfolio(prev=>prev.filter(p=>p.id!==id));setChartData([]);setStats(null);}
+  function updateInst(id,k,v){setPortfolio(prev=>prev.map(p=>p.id===id?{...p,[k]:v}:p));setChartData([]);setStats(null);}
+  const simulate=useCallback(async()=>{
+    if(!portfolio.length)return;
+    setSimulating(true);setChartData([]);setStats(null);
+    const fetched=await Promise.all(portfolio.map(async(inst)=>{
+      try{
+        const startTs=Math.floor(new Date(`${inst.startDate}T${inst.startTime}:00`).getTime()/1000);
+        const data=await fetchYahoo({ticker:inst.ticker,interval:"1mo",period1:startTs,period2:Math.floor(Date.now()/1000)});
+        const ts=data.chart.result[0].timestamp;
+        const closes=data.chart.result[0].indicators.quote[0].close;
+        let shares=0,totalInvested=0;
+        const monthly=[];
+        for(let i=0;i<ts.length;i++){if(closes[i]==null)continue;shares+=inst.monthly/closes[i];totalInvested+=inst.monthly;const d=new Date(ts[i]*1000);monthly.push({date:d.toISOString().slice(0,7),label:d.toLocaleDateString("it-IT",{month:"short",year:"2-digit"}),invested:Math.round(totalInvested),value:Math.round(shares*closes[i])});}
+        return{...inst,monthly,ok:true};
+      }catch(e){return{...inst,monthly:[],ok:false};}
+    }));
+    const allDates=[...new Set(fetched.flatMap(r=>r.monthly.map(m=>m.date)))].sort();
+    const combined=allDates.map(date=>{const point={date,label:date.slice(0,7)};let tI=0,tV=0;fetched.forEach(r=>{const m=r.monthly.find(x=>x.date===date);if(m){point["val_"+r.ticker]=m.value;tI+=m.invested;tV+=m.value;}});point.totalInvested=Math.round(tI);point.totalValue=Math.round(tV);return point;});
+    const last=combined[combined.length-1]||{};
+    const tI=last.totalInvested||0,tV=last.totalValue||0,gain=tV-tI,pct=tI>0?(gain/tI)*100:0;
+    const y0=new Date(allDates[0]+"-01"),y1=new Date(allDates[allDates.length-1]+"-01");
+    const years=(y1-y0)/(1000*60*60*24*365.25),cagr=years>0&&tI>0?(Math.pow(tV/tI,1/years)-1)*100:0;
+    const instStats=fetched.map(r=>{const l=r.monthly[r.monthly.length-1];if(!l)return{...r,invested:0,value:0,gain:0,pct:0};const g=l.value-l.invested;return{...r,invested:l.invested,value:l.value,gain:g,pct:l.invested>0?(g/l.invested)*100:0};});
+    setChartData(combined);setStats({totalInvested:tI,totalValue:tV,gain,pct,cagr,years,instStats});setActiveTab("results");setSimulating(false);
+  },[portfolio]);
+  const bg2=dark?"#0A0F1A":"#FFFFFF",bg3=dark?"#0F1726":"#EEF1F7",bg4=dark?"#080D14":"#F4F6FA";
+  const text=dark?"#E8EDF3":"#0D1520",text2=dark?"#5A6A7A":"#5A6A80",text3=dark?"#2A3A4A":"#9AA8B8";
+  const border=dark?"rgba(255,255,255,0.07)":"rgba(0,0,0,0.07)",card=dark?"rgba(255,255,255,0.025)":"rgba(0,0,0,0.02)";
+  const e=React.createElement;
+  const chartSeries=[{key:"totalInvested",color:"rgba(255,255,255,0.3)",width:1.5,dash:true,name:t.invested},...portfolio.map(inst=>({key:"val_"+inst.ticker,color:inst.color,width:2,name:inst.ticker})),...(portfolio.length>1?[{key:"totalValue",color:"#FFFFFF",width:2.5,name:"Total"}]:[])];
+  return e('div',{style:{minHeight:"100vh",background:bg4,color:text,fontFamily:"'DM Sans',system-ui,sans-serif"}},
+    e('nav',{style:{background:bg2,borderBottom:`1px solid ${border}`,padding:"0 20px",height:52,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:100}},
+      e('div',{style:{display:"flex",alignItems:"center",gap:10}},
+        e('button',{onClick:onBack,style:{background:"transparent",border:`1px solid ${border}`,borderRadius:8,color:text2,padding:"4px 12px",fontSize:12,cursor:"pointer"}},t.backHome),
+        e('div',{style:{fontSize:15,fontWeight:700,letterSpacing:-0.5,color:text}},"Compound",e('span',{style:{color:"#00C896"}},"Path"),e('span',{style:{fontSize:11,color:text3,fontWeight:400,marginLeft:6}},"Simulator"))
+      ),
+      e('div',{style:{display:"flex",gap:3,flexWrap:"wrap"}},LANGS.map(l=>e('button',{key:l,onClick:()=>setLang(l),style:{background:lang===l?"rgba(0,200,150,0.12)":"transparent",border:lang===l?"1px solid rgba(0,200,150,0.3)":"1px solid transparent",borderRadius:6,color:lang===l?"#00C896":text3,padding:"3px 6px",fontSize:13,cursor:"pointer"}},FLAGS[l])))
+    ),
+    e('div',{style:{maxWidth:860,margin:"0 auto",padding:"24px 16px"}},
+      e('div',{style:{marginBottom:18}},e('h1',{style:{fontSize:"clamp(18px,4vw,24px)",fontWeight:700,letterSpacing:-0.5,marginBottom:4,color:text}},t.simTitle),e('p',{style:{color:text2,fontSize:13}},t.simSubtitle)),
+      e('div',{style:{position:"relative",marginBottom:14},ref:dropRef},
+        e('div',{style:{position:"relative"}},
+          e('span',{style:{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:text3,fontSize:15}},"🔍"),
+          e('input',{value:query,onChange:ev=>setQuery(ev.target.value),placeholder:t.searchPlaceholder,style:{width:"100%",background:bg2,border:`1.5px solid ${border}`,borderRadius:12,color:text,padding:"12px 16px 12px 40px",fontSize:14,outline:"none"}})
+        ),
+        results.length>0&&e('div',{style:{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:bg2,border:`1px solid ${border}`,borderRadius:12,zIndex:50,overflow:"hidden",boxShadow:"0 12px 40px rgba(0,0,0,0.4)"}},
+          results.map(r=>e('div',{key:r.ticker,onClick:()=>addInst(r),style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 16px",cursor:"pointer",borderBottom:`1px solid ${border}`},onMouseEnter:ev=>ev.currentTarget.style.background=dark?"rgba(255,255,255,0.04)":"rgba(0,0,0,0.03)",onMouseLeave:ev=>ev.currentTarget.style.background="transparent"},
+            e('div',{style:{display:"flex",alignItems:"center",gap:10}},e('span',{style:{fontWeight:700,fontSize:13,minWidth:76,color:text}},r.ticker),e('span',{style:{color:text2,fontSize:13}},r.name)),
+            e('div',{style:{display:"flex",gap:8,alignItems:"center",flexShrink:0}},e('span',{style:{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:5,background:(TYPE_COLOR[r.type]||"#00C896")+"20",color:TYPE_COLOR[r.type]||"#00C896"}},r.type),e('span',{style:{fontSize:11,color:text3}},r.isin))
+          ))
+        )
+      ),
+      portfolio.length>0&&e('div',{style:{display:"flex",gap:4,background:bg3,borderRadius:10,padding:4,marginBottom:14,width:"fit-content"}},[["portfolio","📋 "+t.portfolio+" ("+portfolio.length+")"],["results","📊 Results"]].map(([v,l])=>e('button',{key:v,onClick:()=>setActiveTab(v),style:{background:activeTab===v?"#00C896":"transparent",border:"none",borderRadius:8,color:activeTab===v?"#000":text2,padding:"6px 16px",fontSize:13,fontWeight:600,cursor:"pointer"}},l))),
+      activeTab==="portfolio"&&e('div',null,
+        portfolio.length===0?e('div',{style:{background:card,border:`1px dashed ${border}`,borderRadius:14,padding:"44px 20px",textAlign:"center",color:text3,marginBottom:18}},e('div',{style:{fontSize:32,marginBottom:10}},"📊"),e('p',{style:{fontSize:14}},t.emptyPortfolio)):
+        e('div',{style:{display:"flex",flexDirection:"column",gap:10,marginBottom:14}},
+          portfolio.map(inst=>e('div',{key:inst.id,style:{background:card,border:`1px solid ${border}`,borderLeft:`3px solid ${inst.color}`,borderRadius:12,padding:"13px 15px"}},
+            e('div',{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}},
+              e('div',{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}},e('div',{style:{width:8,height:8,borderRadius:"50%",background:inst.color,flexShrink:0}}),e('span',{style:{fontWeight:700,fontSize:14,color:text}},inst.ticker),e('span',{style:{color:text2,fontSize:12}},inst.name),e('span',{style:{fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:5,background:(TYPE_COLOR[inst.type]||"#00C896")+"20",color:TYPE_COLOR[inst.type]||"#00C896"}},inst.type)),
+              e('button',{onClick:()=>removeInst(inst.id),style:{background:"transparent",border:"1px solid rgba(255,77,77,0.25)",borderRadius:6,color:"rgba(255,77,77,0.7)",padding:"3px 9px",fontSize:12,cursor:"pointer",flexShrink:0}},"✕")
+            ),
+            e('div',{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:8}},
+              e('div',null,e('label',{style:{fontSize:10,color:text3,textTransform:"uppercase",letterSpacing:0.8,display:"block",marginBottom:3}},t.startDate),e('input',{type:"date",value:inst.startDate,onChange:ev=>updateInst(inst.id,"startDate",ev.target.value),style:{width:"100%",background:bg4,border:`1px solid ${border}`,borderRadius:8,color:text,padding:"7px 9px",fontSize:13,outline:"none"}})),
+              e('div',null,e('label',{style:{fontSize:10,color:text3,textTransform:"uppercase",letterSpacing:0.8,display:"block",marginBottom:3}},t.time),e('input',{type:"time",value:inst.startTime,onChange:ev=>updateInst(inst.id,"startTime",ev.target.value),style:{width:"100%",background:bg4,border:`1px solid ${border}`,borderRadius:8,color:text,padding:"7px 9px",fontSize:13,outline:"none"}})),
+              e('div',null,e('label',{style:{fontSize:10,color:text3,textTransform:"uppercase",letterSpacing:0.8,display:"block",marginBottom:3}},t.monthly),e('div',{style:{position:"relative"}},e('span',{style:{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:"#00C896",fontSize:13,fontWeight:700}},"€"),e('input',{type:"number",value:inst.monthly,min:10,step:10,onChange:ev=>updateInst(inst.id,"monthly",Math.max(10,Number(ev.target.value))),style:{width:"100%",background:bg4,border:`1px solid ${border}`,borderRadius:8,color:"#00C896",padding:"7px 9px 7px 20px",fontSize:13,fontWeight:700,outline:"none"}})))
+            )
+          ))
+        ),
+        portfolio.length>0&&e('button',{onClick:simulate,disabled:simulating,style:{width:"100%",background:simulating?bg3:"#00C896",border:"none",borderRadius:12,color:simulating?text3:"#000",padding:"13px",fontSize:15,fontWeight:700,cursor:simulating?"not-allowed":"pointer"}},
+          simulating?e('span',{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:8}},e('span',{style:{width:15,height:15,border:"2px solid rgba(0,200,150,0.2)",borderTop:"2px solid #00C896",borderRadius:"50%",display:"inline-block",animation:"spin 0.7s linear infinite"}}),t.simulating):"▶ "+t.simulate+" "+portfolio.length+" instrument"+(portfolio.length>1?"s":"")
+        )
+      ),
+      activeTab==="results"&&stats&&e('div',null,
+        e('div',{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:18}},
+          [{label:t.totalInvested,value:fmtEur(stats.totalInvested),sub:stats.years.toFixed(1)+" "+t.years,color:text2},{label:t.currentValue,value:fmtEur(stats.totalValue),sub:"",color:text},{label:t.totalGain,value:fmtEur(stats.gain),sub:fmtPct(stats.pct),color:stats.gain>=0?"#00C896":"#FF4D4D"},{label:t.annualReturn,value:fmtPct(stats.cagr),sub:"CAGR",color:stats.cagr>=0?"#0099FF":"#FF4D4D"}].map((s,i)=>e('div',{key:i,style:{background:card,border:`1px solid ${border}`,borderRadius:12,padding:"13px",textAlign:"center"}},e('p',{style:{fontSize:10,color:text3,textTransform:"uppercase",letterSpacing:0.8,marginBottom:5}},s.label),e('p',{style:{fontSize:"clamp(13px,3vw,18px)",fontWeight:700,color:s.color,marginBottom:2}},s.value),s.sub&&e('p',{style:{fontSize:11,color:text3}},s.sub)))
+        ),
+        e('div',{style:{background:card,border:`1px solid ${border}`,borderRadius:14,padding:"16px 8px 8px",marginBottom:14}},e(SimpleChart,{data:chartData,series:chartSeries,darkMode:dark})),
+        e('div',{style:{display:"flex",flexDirection:"column",gap:8,marginBottom:14}},
+          stats.instStats.map(inst=>e('div',{key:inst.ticker,style:{background:card,border:`1px solid ${border}`,borderLeft:`3px solid ${inst.color}`,borderRadius:10,padding:"11px 13px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}},
+            e('div',{style:{display:"flex",alignItems:"center",gap:7}},e('div',{style:{width:7,height:7,borderRadius:"50%",background:inst.color}}),e('span',{style:{fontWeight:600,fontSize:13,color:text}},inst.ticker),e('span',{style:{color:text2,fontSize:12}},inst.name)),
+            e('div',{style:{display:"flex",gap:14,fontSize:12}},e('span',{style:{color:text2}},fmtEur(inst.invested)),e('span',{style:{color:text,fontWeight:600}},fmtEur(inst.value)),e('span',{style:{color:inst.gain>=0?"#00C896":"#FF4D4D",fontWeight:600}},fmtPct(inst.pct)))
+          ))
+        ),
+        e('p',{style:{fontSize:11,color:text3,textAlign:"center",lineHeight:1.5}},t.simDisclaimer)
+      )
+    )
+  );
+}
+
+function App(){
+  const [page,setPage]=useState("home");
+  const [lang,setLang]=useState("en");
+  const [dark,setDark]=useState(true);
+  if(page==="simulator")return React.createElement(Simulator,{onBack:()=>setPage("home"),lang,setLang,dark});
+  return React.createElement(Homepage,{onOpen:()=>setPage("simulator"),lang,setLang,dark,setDark});
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>

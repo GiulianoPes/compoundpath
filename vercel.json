@@ -1,12 +1,6 @@
 {
-  "functions": {
-    "api/chart.py": {
-      "runtime": "python3.12",
-      "maxDuration": 30
-    },
-    "api/search.py": {
-      "runtime": "python3.12",
-      "maxDuration": 15
-    }
-  }
+  "rewrites": [
+    { "source": "/api/yahoo", "destination": "/api/yahoo" },
+    { "source": "/(.*)", "destination": "/public/index.html" }
+  ]
 }
