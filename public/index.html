@@ -145,7 +145,7 @@ function SimpleChart({data,series,darkMode}){
       const pts=data.map((d,i)=>({x:toX(i),y:d[s.key]!=null?toY(d[s.key]):null})).filter(p=>p.y!=null);
       if(pts.length<2)return;
       ctx.beginPath();ctx.moveTo(pts[0].x,PAD.top+cH);pts.forEach(p=>ctx.lineTo(p.x,p.y));ctx.lineTo(pts[pts.length-1].x,PAD.top+cH);ctx.closePath();
-      const grad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);grad.addColorStop(0,s.color+"40");grad.addColorStop(1,s.color+"00");ctx.fillStyle=grad;ctx.fill();
+      const grad=ctx.createLinearGradient(0,PAD.top,0,PAD.top+cH);grad.addColorStop(0,s.color.startsWith("rgba")?"rgba(255,255,255,0.06)":s.color+"40");grad.addColorStop(1,s.color.startsWith("rgba")?"rgba(255,255,255,0)":s.color+"00");ctx.fillStyle=grad;ctx.fill();
       ctx.beginPath();ctx.strokeStyle=s.color;ctx.lineWidth=s.width||2;ctx.lineJoin="round";
       if(s.dash)ctx.setLineDash([4,4]);else ctx.setLineDash([]);
       pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);
