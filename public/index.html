@@ -261,7 +261,7 @@ function Simulator({onBack,lang,setLang,dark}){
     }
   },[query]);
   useEffect(()=>{function h(e){if(dropRef.current&&!dropRef.current.contains(e.target))setResults([]);}document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
-  function addInst(inst){if(portfolio.find(p=>p.ticker===inst.ticker))return;setPortfolio(prev=>[...prev,{id:Date.now(),...inst,monthly:100,startDate:"2015-01-01",startTime:"09:30",color:COLORS[prev.length%COLORS.length]}]);setQuery("");setResults([]);setChartData([]);setStats(null);}
+  function addInst(inst){if(portfolio.find(p=>p.ticker===inst.ticker))return;setPortfolio(prev=>[...prev,{id:Date.now(),...inst,monthly:100,startDate:(()=>{const n=new Date();return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0");})(),startTime:(()=>{const n=new Date();return String(n.getHours()).padStart(2,"0")+":"+String(n.getMinutes()).padStart(2,"0");})(),color:COLORS[prev.length%COLORS.length]}]);setQuery("");setResults([]);setChartData([]);setStats(null);}
   function removeInst(id){setPortfolio(prev=>prev.filter(p=>p.id!==id));setChartData([]);setStats(null);}
   function updateInst(id,k,v){setPortfolio(prev=>prev.map(p=>p.id===id?{...p,[k]:v}:p));setChartData([]);setStats(null);}
   const simulate=useCallback(async()=>{
